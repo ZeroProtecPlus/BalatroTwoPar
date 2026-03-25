@@ -1,20 +1,13 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- */
-
-package com.mycompany.juegocartas;
-
 import java.util.Random;
 
 /**
  *
  * @author JuanSebastianGiraldo
  */
-public class JuegoCartas {
+public class logicGame {
 
-public int[] getCardNumbers(){
-    
-      int[] numbers = new int[16];
+    public int[] getCardNumbers() {
+        int[] numbers = new int[16];
 
         int count = 0;
 
@@ -37,10 +30,6 @@ public int[] getCardNumbers(){
             }
         }
 
-        returm numbers;
-    
-}
-    
-    
-    
+        return numbers;
+    }
 }

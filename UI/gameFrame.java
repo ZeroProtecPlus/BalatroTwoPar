@@ -5,38 +5,47 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 
+/**
+ * Clase principal de la interfaz de usuario que extiende de JFrame (Ventana).
+ * Maneja tanto la parte visual como la interacción directa con el usuario.
+ */
 public class gameFrame extends JFrame {
 
-    private JPanel panelCartas;
-    private JButton[] cartas;
-    private JButton btnReiniciar;
-    private JLabel lblTitulo;
+    // --- Componentes de la Interfaz ---
+    private JPanel panelCartas; // Contenedor para la cuadrícula de botones
+    private JButton[] cartas; // Arreglo de 16 botones que representan las cartas
+    private JButton btnReiniciar; // Botón para resetear el juego
+    private JLabel lblTitulo; // Etiqueta para mostrar pares encontrados
+    private JLabel lblPuntuacion; // Etiqueta para mostrar el puntaje actual
 
-    // NUEVO: Etiqueta y variable para la puntuación
-    private JLabel lblPuntuacion;
-    private int puntuacion = 20;
+    // --- Variables de Estado del Juego ---
+    private int puntuacion = 20; // Puntaje inicial
+    private logicGame log = new logicGame(); // Instancia de la lógica del juego (mezcla, validación)
 
-    private logicGame log = new logicGame();
+    private int primerIndex = -1; // Guarda el índice de la primera carta volteada (-1 = ninguna)
+    private int paresEncontrados = 0; // Contador de parejas logradas
+    private boolean esperando = false; // Bloqueo para evitar clicks mientras se muestran cartas erróneas
 
-    private int primerIndex = -1;
-    private int paresEncontrados = 0;
-    private boolean esperando = false;
+    // --- Constantes y Recursos Visuales ---
+    private static final int CARTA_W = 142; // Ancho de la carta
+    private static final int CARTA_H = 190; // Alto de la carta
+    private ImageIcon[] imagenesCartas = new ImageIcon[9]; // Almacena las imágenes frontales (1-8)
+    private ImageIcon imagenTapada; // Almacena la imagen del reverso (Joker)
 
-    // Tamaño de cada carta
-    private static final int CARTA_W = 142;
-    private static final int CARTA_H = 190;
-
-    private ImageIcon[] imagenesCartas = new ImageIcon[9];
-    private ImageIcon imagenTapada;
-
+    /**
+     * Constructor: Configura el orden de encendido de la aplicación.
+     */
     public gameFrame() {
-        cargarImagenes(); // ← Se llama PRIMERO
-        configurarVentana();
-        inicializarComponentes();
-        pack(); // ← Ajusta la ventana al contenido
-        setLocationRelativeTo(null);
+        cargarImagenes(); // 1. Cargar fotos de disco a memoria
+        configurarVentana(); // 2. Título, cierre y redimensión
+        inicializarComponentes(); // 3. Crear botones, paneles y labels
+        pack(); // 4. Ajustar tamaño de ventana a los elementos
+        setLocationRelativeTo(null); // 5. Centrar en pantalla
     }
 
+    /**
+     * Carga una imagen, la escala al tamaño de la carta y devuelve un ImageIcon.
+     */
     private ImageIcon escalarIcono(String ruta) {
         java.net.URL url = getClass().getResource(ruta);
         if (url == null) {
@@ -49,9 +58,13 @@ public class gameFrame extends JFrame {
         return new ImageIcon(img);
     }
 
+    /**
+     * Llena el arreglo de imágenes con los archivos locales.
+     */
     private void cargarImagenes() {
         imagenTapada = escalarIcono("/SourceImages/Joker.png");
         for (int i = 1; i <= 8; i++) {
+            // Se asume que las fotos se llaman 1.png, 2.png...
             imagenesCartas[i] = escalarIcono("/SourceImages/" + i + ".png");
         }
     }
@@ -62,8 +75,11 @@ public class gameFrame extends JFrame {
         setResizable(false);
     }
 
+    /**
+     * Crea toda la estructura visual usando Layouts.
+     */
     private void inicializarComponentes() {
-        // 1. Ajuste de cálculos de tamaño
+        // --- Cálculos de Dimensiones ---
         int cols = 4,
             rows = 4,
             gap = 10,
@@ -71,27 +87,24 @@ public class gameFrame extends JFrame {
         int tableroW = cols * CARTA_W + (cols - 1) * gap + margen * 2;
         int tableroH = rows * CARTA_H + (rows - 1) * gap;
         int ventanaW = tableroW + 20;
-
-        // REDUCIDO: De 150 a 100 para que el botón de abajo suba
         int ventanaH = tableroH + 110;
 
+        // Panel principal con fondo (clase personalizada vFondo)
         vFondo panelFondoPrincipal = new vFondo(ventanaW, ventanaH);
-        panelFondoPrincipal.setLayout(new BorderLayout(5, 5)); // Menos espacio entre zonas
+        panelFondoPrincipal.setLayout(new BorderLayout(5, 5));
         panelFondoPrincipal.setBorder(
             BorderFactory.createEmptyBorder(5, 10, 5, 10)
         );
         panelFondoPrincipal.setPreferredSize(new Dimension(ventanaW, ventanaH));
 
-        // 2. Panel Norte: CAMBIADO a 1 fila, 2 columnas para ponerlos lado a lado
+        // --- Panel Superior (Norte): Información de Juego ---
         JPanel panelNorte = new JPanel(new GridLayout(1, 2));
         panelNorte.setOpaque(false);
 
-        // Título / Pares (Alineado a la izquierda)
         lblTitulo = new JLabel("Pares: 0 / 8", SwingConstants.LEFT);
         lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
         lblTitulo.setForeground(Color.WHITE);
 
-        // Puntuación (Alineado a la derecha)
         lblPuntuacion = new JLabel("Puntos: 20", SwingConstants.RIGHT);
         lblPuntuacion.setFont(new Font("Arial", Font.BOLD, 18));
         lblPuntuacion.setForeground(Color.YELLOW);
@@ -100,7 +113,7 @@ public class gameFrame extends JFrame {
         panelNorte.add(lblPuntuacion);
         panelFondoPrincipal.add(panelNorte, BorderLayout.NORTH);
 
-        // 3. Tablero de cartas (Sin cambios, solo ajuste de margen)
+        // --- Panel Central: El Tablero de Cartas ---
         panelCartas = new JPanel(new GridLayout(rows, cols, gap, gap));
         panelCartas.setBorder(
             BorderFactory.createEmptyBorder(5, margen, 5, margen)
@@ -111,54 +124,55 @@ public class gameFrame extends JFrame {
         for (int i = 0; i < 16; i++) {
             cartas[i] = new JButton();
             cartas[i].setPreferredSize(new Dimension(CARTA_W, CARTA_H));
-            // ... resto del código de cartas igual ...
-            final int idx = i;
-            cartas[i].addActionListener(e -> manejarClick(idx));
+            final int idx = i; // Variable final para usarla dentro del Lambda
+            cartas[i].addActionListener(e -> manejarClick(idx)); // Evento de click
             panelCartas.add(cartas[i]);
-            tapar(i);
+            tapar(i); // Iniciar con el reverso
         }
-
         panelFondoPrincipal.add(panelCartas, BorderLayout.CENTER);
 
-        // 4. Panel Sur (Botón Reiniciar)
+        // --- Panel Inferior (Sur): Botón Reiniciar ---
         btnReiniciar = new JButton("Reiniciar Juego");
         btnReiniciar.setFont(new Font("Arial", Font.BOLD, 14));
         btnReiniciar.addActionListener(e -> reiniciarJuego());
 
         JPanel panelSur = new JPanel();
         panelSur.setOpaque(false);
-        // Margen pequeño para no empujar el botón fuera de la pantalla
-        panelSur.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0));
         panelSur.add(btnReiniciar);
         panelFondoPrincipal.add(panelSur, BorderLayout.SOUTH);
 
         setContentPane(panelFondoPrincipal);
     }
 
+    /**
+     * Lógica principal al hacer click en una carta.
+     */
     private void manejarClick(int idx) {
-        if (esperando) return;
-        if (!cartas[idx].isEnabled()) return;
-        if (primerIndex == idx) return;
+        // Validaciones preventivas
+        if (esperando) return; // Si hay un timer corriendo, no hacer nada
+        if (!cartas[idx].isEnabled()) return; // Si la carta ya fue encontrada, ignorar
+        if (primerIndex == idx) return; // Si hace click en la misma carta ya abierta
 
-        destapar(idx);
+        destapar(idx); // Mostrar la imagen frontal
 
         if (primerIndex == -1) {
+            // Es la primera carta que voltea en este turno
             primerIndex = idx;
         } else {
-            esperando = true;
+            // Es la segunda carta, hay que comparar
+            esperando = true; // Bloquear otros clicks
             int segundoIndex = idx;
 
             if (log.esPar(primerIndex, segundoIndex)) {
+                // --- CASO: ACIERTO ---
                 paresEncontrados++;
-
-                // NUEVO: Sumar 100 puntos y actualizar texto
                 puntuacion += 100;
                 lblPuntuacion.setText("Puntos: " + puntuacion);
-
                 lblTitulo.setText("Pares: " + paresEncontrados + " / 8");
 
+                // Breve pausa para que el usuario vea la carta antes de desactivarla
                 Timer timer = new Timer(600, e -> {
-                    cartas[primerIndex].setEnabled(false);
+                    cartas[primerIndex].setEnabled(false); // "Quitar" del juego
                     cartas[segundoIndex].setEnabled(false);
                     primerIndex = -1;
                     esperando = false;
@@ -166,20 +180,18 @@ public class gameFrame extends JFrame {
                     if (paresEncontrados == 8) {
                         JOptionPane.showMessageDialog(
                             this,
-                            "¡Felicitaciones! ¡Encontraste todos los pares!\nPuntuación final: " +
-                                puntuacion,
-                            "¡Ganaste!",
-                            JOptionPane.INFORMATION_MESSAGE
+                            "¡Victoria!\nPuntuación: " + puntuacion
                         );
                     }
                 });
                 timer.setRepeats(false);
                 timer.start();
             } else {
-                // NUEVO: Restar 10 puntos y actualizar texto
+                // --- CASO: ERROR ---
                 puntuacion -= 10;
                 lblPuntuacion.setText("Puntos: " + puntuacion);
 
+                // Pausa más larga (900ms) para que memorice el error, luego tapar
                 Timer timer = new Timer(900, e -> {
                     tapar(primerIndex);
                     tapar(segundoIndex);
@@ -192,16 +204,21 @@ public class gameFrame extends JFrame {
         }
     }
 
+    /**
+     * Cambia el icono del botón por la imagen que corresponde según la lógica.
+     */
     private void destapar(int idx) {
-        int valor = log.getCardNumbers()[idx];
+        int valor = log.getCardNumbers()[idx]; // Obtener qué número/imagen hay en esa posición
         if (imagenesCartas[valor] != null) {
             cartas[idx].setIcon(imagenesCartas[valor]);
         } else {
-            cartas[idx].setText(String.valueOf(valor));
-            cartas[idx].setForeground(Color.WHITE);
+            cartas[idx].setText(String.valueOf(valor)); // Backup si fallan las imágenes
         }
     }
 
+    /**
+     * Vuelve a poner el reverso de la carta.
+     */
     private void tapar(int idx) {
         if (imagenTapada != null) {
             cartas[idx].setIcon(imagenTapada);
@@ -210,14 +227,16 @@ public class gameFrame extends JFrame {
         }
     }
 
+    /**
+     * Restablece todas las variables y la interfaz al estado inicial.
+     */
     private void reiniciarJuego() {
-        log.reiniciar();
+        log.reiniciar(); // Mezcla las cartas de nuevo en la lógica
         paresEncontrados = 0;
         primerIndex = -1;
         esperando = false;
-
-        // NUEVO: Reiniciar puntos
         puntuacion = 20;
+
         lblPuntuacion.setText("Puntos: 20");
         lblTitulo.setText("¡Concéntrese!");
 

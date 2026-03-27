@@ -8,7 +8,6 @@ public class Main {
             new Runnable() {
                 @Override
                 public void run() {
-                    // Cambiamos VentanaJuego por gameFrame
                     gameFrame juego = new gameFrame();
                     juego.setVisible(true);
                 }

@@ -3,24 +3,29 @@ package UI;
 import LogicGame.logicGame;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.function.IntConsumer;
 import javax.swing.*;
 
 /**
- * Clase principal de la interfaz de usuario que extiende de JFrame (Ventana).
- * Maneja tanto la parte visual como la interacción directa con el usuario.
+ * Ventana principal del juego: renderiza el tablero, aplica puntajes y
+ * coordina la logica de parejas segun la configuracion del nivel.
  */
 public class gameFrame extends JFrame {
 
     // --- Componentes de la Interfaz ---
     private JPanel panelCartas; // Contenedor para la cuadrícula de botones
-    private JButton[] cartas; // Arreglo de 16 botones que representan las cartas
+    private JButton[] cartas; // Arreglo de botones que representan las cartas
     private JButton btnReiniciar; // Botón para resetear el juego
     private JLabel lblTitulo; // Etiqueta para mostrar pares encontrados
     private JLabel lblPuntuacion; // Etiqueta para mostrar el puntaje actual
 
     // --- Variables de Estado del Juego ---
-    private int puntuacion = 20; // Puntaje inicial
-    private logicGame log = new logicGame(); // Instancia de la lógica del juego (mezcla, validación)
+    public static final int BASE_SCORE = 20;
+    public static final int SCORE_PER_MATCH = 100;
+    public static final int SCORE_PENALTY = 10;
+
+    private int puntuacion = BASE_SCORE; // Puntaje inicial
+    private logicGame log; // Instancia de la lógica del juego (mezcla, validación)
 
     private int primerIndex = -1; // Guarda el índice de la primera carta volteada (-1 = ninguna)
     private int paresEncontrados = 0; // Contador de parejas logradas
@@ -29,14 +34,36 @@ public class gameFrame extends JFrame {
     // --- Constantes y Recursos Visuales ---
     private static final int CARTA_W = 142; // Ancho de la carta
     private static final int CARTA_H = 190; // Alto de la carta
-    private ImageIcon[] imagenesCartas = new ImageIcon[9]; // Almacena las imágenes frontales (1-8)
+    private ImageIcon[] imagenesCartas; // Almacena las imágenes frontales
     private ImageIcon imagenTapada; // Almacena la imagen del reverso (Joker)
 
+    private final LevelConfig levelConfig;
+    private final int requiredScore;
+    private final IntConsumer onComplete;
+    private final Runnable onExit;
+
     /**
-     * Constructor: Configura el orden de encendido de la aplicación.
+     * Constructor por defecto para mantener compatibilidad.
      */
     public gameFrame() {
-        cargarImagenes(); // 1. Cargar fotos de disco a memoria
+        this(LevelConfig.defaultLevel(), 0, null, null);
+    }
+
+    public gameFrame(
+        LevelConfig levelConfig,
+        int requiredScore,
+        IntConsumer onComplete,
+        Runnable onExit
+    ) {
+        this.levelConfig = levelConfig;
+        this.requiredScore = requiredScore;
+        this.onComplete = onComplete;
+        this.onExit = onExit;
+        this.log = new logicGame(
+            levelConfig.getCardCount(),
+            levelConfig.getPairCount()
+        );
+        cargarImagenes(levelConfig.getPairCount()); // 1. Cargar fotos de disco a memoria
         configurarVentana(); // 2. Título, cierre y redimensión
         inicializarComponentes(); // 3. Crear botones, paneles y labels
         pack(); // 4. Ajustar tamaño de ventana a los elementos
@@ -59,11 +86,12 @@ public class gameFrame extends JFrame {
     }
 
     /**
-     * Llena el arreglo de imágenes con los archivos locales.
+     * Llena el arreglo de imagenes segun el numero de pares del nivel.
      */
-    private void cargarImagenes() {
+    private void cargarImagenes(int pairCount) {
         imagenTapada = escalarIcono("/SourceImages/Joker.png");
-        for (int i = 1; i <= 8; i++) {
+        imagenesCartas = new ImageIcon[pairCount + 1];
+        for (int i = 1; i <= pairCount; i++) {
             // Se asume que las fotos se llaman 1.png, 2.png...
             imagenesCartas[i] = escalarIcono("/SourceImages/" + i + ".png");
         }
@@ -76,12 +104,12 @@ public class gameFrame extends JFrame {
     }
 
     /**
-     * Crea toda la estructura visual usando Layouts.
+     * Crea la estructura visual y el tablero segun la cantidad de cartas.
      */
     private void inicializarComponentes() {
         // --- Cálculos de Dimensiones ---
-        int cols = 4,
-            rows = 4,
+        int rows = 4,
+            cols = Math.max(1, levelConfig.getCardCount() / rows),
             gap = 10,
             margen = 20;
         int tableroW = cols * CARTA_W + (cols - 1) * gap + margen * 2;
@@ -101,11 +129,17 @@ public class gameFrame extends JFrame {
         JPanel panelNorte = new JPanel(new GridLayout(1, 2));
         panelNorte.setOpaque(false);
 
-        lblTitulo = new JLabel("Pares: 0 / 8", SwingConstants.LEFT);
+        lblTitulo = new JLabel(
+            "Pares: 0 / " + levelConfig.getPairCount(),
+            SwingConstants.LEFT
+        );
         lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
         lblTitulo.setForeground(Color.WHITE);
 
-        lblPuntuacion = new JLabel("Puntos: 20", SwingConstants.RIGHT);
+        lblPuntuacion = new JLabel(
+            "Puntos: " + BASE_SCORE,
+            SwingConstants.RIGHT
+        );
         lblPuntuacion.setFont(new Font("Arial", Font.BOLD, 18));
         lblPuntuacion.setForeground(Color.YELLOW);
 
@@ -120,8 +154,8 @@ public class gameFrame extends JFrame {
         );
         panelCartas.setOpaque(false);
 
-        cartas = new JButton[16];
-        for (int i = 0; i < 16; i++) {
+        cartas = new JButton[levelConfig.getCardCount()];
+        for (int i = 0; i < cartas.length; i++) {
             cartas[i] = new JButton();
             cartas[i].setPreferredSize(new Dimension(CARTA_W, CARTA_H));
             final int idx = i; // Variable final para usarla dentro del Lambda
@@ -145,7 +179,7 @@ public class gameFrame extends JFrame {
     }
 
     /**
-     * Lógica principal al hacer click en una carta.
+     * Lógica principal del turno: revela, compara y puntua.
      */
     private void manejarClick(int idx) {
         // Validaciones preventivas
@@ -166,9 +200,14 @@ public class gameFrame extends JFrame {
             if (log.esPar(primerIndex, segundoIndex)) {
                 // --- CASO: ACIERTO ---
                 paresEncontrados++;
-                puntuacion += 100;
+                puntuacion += SCORE_PER_MATCH;
                 lblPuntuacion.setText("Puntos: " + puntuacion);
-                lblTitulo.setText("Pares: " + paresEncontrados + " / 8");
+                lblTitulo.setText(
+                    "Pares: " +
+                        paresEncontrados +
+                        " / " +
+                        levelConfig.getPairCount()
+                );
 
                 // Breve pausa para que el usuario vea la carta antes de desactivarla
                 Timer timer = new Timer(600, e -> {
@@ -177,18 +216,25 @@ public class gameFrame extends JFrame {
                     primerIndex = -1;
                     esperando = false;
 
-                    if (paresEncontrados == 8) {
+                    if (paresEncontrados == levelConfig.getPairCount()) {
+                        String titulo = (puntuacion >= requiredScore)
+                            ? "¡Victoria!"
+                            : "Derrota";
                         JOptionPane.showMessageDialog(
                             this,
-                            "¡Victoria!\nPuntuación: " + puntuacion
+                            titulo + "\nPuntuación: " + puntuacion
                         );
+                        if (onComplete != null) {
+                            onComplete.accept(puntuacion);
+                        }
+                        dispose();
                     }
                 });
                 timer.setRepeats(false);
                 timer.start();
             } else {
                 // --- CASO: ERROR ---
-                puntuacion -= 10;
+                puntuacion -= SCORE_PENALTY;
                 lblPuntuacion.setText("Puntos: " + puntuacion);
 
                 // Pausa más larga (900ms) para que memorice el error, luego tapar
@@ -205,7 +251,7 @@ public class gameFrame extends JFrame {
     }
 
     /**
-     * Cambia el icono del botón por la imagen que corresponde según la lógica.
+     * Muestra la imagen correspondiente a la carta destapada.
      */
     private void destapar(int idx) {
         int valor = log.getCardNumbers()[idx]; // Obtener qué número/imagen hay en esa posición
@@ -228,21 +274,12 @@ public class gameFrame extends JFrame {
     }
 
     /**
-     * Restablece todas las variables y la interfaz al estado inicial.
+     * Finaliza la sesion actual y notifica salida al menu.
      */
     private void reiniciarJuego() {
-        log.reiniciar(); // Mezcla las cartas de nuevo en la lógica
-        paresEncontrados = 0;
-        primerIndex = -1;
-        esperando = false;
-        puntuacion = 20;
-
-        lblPuntuacion.setText("Puntos: 20");
-        lblTitulo.setText("¡Concéntrese!");
-
-        for (int i = 0; i < 16; i++) {
-            cartas[i].setEnabled(true);
-            tapar(i);
+        if (onExit != null) {
+            onExit.run();
         }
+        dispose();
     }
 }

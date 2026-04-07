@@ -1,4 +1,4 @@
-import UI.gameFrame;
+import UI.LevelSelectFrame;
 import javax.swing.SwingUtilities;
 
 public class Main {
@@ -8,8 +8,8 @@ public class Main {
             new Runnable() {
                 @Override
                 public void run() {
-                    gameFrame juego = new gameFrame();
-                    juego.setVisible(true);
+                    LevelSelectFrame selector = new LevelSelectFrame();
+                    selector.setVisible(true);
                 }
             }
         );
